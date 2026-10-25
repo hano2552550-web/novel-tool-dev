@@ -1203,8 +1203,17 @@ if (typeof module !== 'undefined') module.exports = {analyzeText, webHtmlToText,
     notify.t = setTimeout(() => el.classList.remove('show'), ms);
   }
   const errText = e => (e && ((e.name ? e.name + ': ' : '') + (e.message || String(e)))) || '不明';
-  window.addEventListener('error', e => notify('error', '予期しないエラーが発生しました', {cause: e.message || '不明', fix: 'ページを再読み込み（Ctrl+F5）してもう一度お試しください。本文は先にコピーして控えておくと安心です。くり返し起きる場合は、画面上部の「💬 フィードバック・不具合報告」からお知らせください。'}));
-  window.addEventListener('unhandledrejection', e => notify('error', '予期しないエラーが発生しました', {cause: errText(e.reason), fix: 'ページを再読み込み（Ctrl+F5）してもう一度お試しください。'}));
+  // ツール自身のエラーだけを知らせる。
+  // ブラウザの機能（Safariの共有ボタンなど）や拡張機能が起こしたエラーは、中身が「Script error.」になり、
+  // 発生元のファイルも分からない。これはツールの不具合ではないので表示しない
+  const reloadHint = () => (window.matchMedia && window.matchMedia('(pointer:coarse)').matches) ? 'ページを再読み込み' : 'ページを再読み込み（Ctrl+F5）';
+  const ownError = e => {
+    if (!e || /^Script error\.?$/i.test(e.message || '')) return false;
+    if (!e.filename) return !!e.error;
+    try { return new URL(e.filename, location.href).href.split('#')[0].split('?')[0] === location.href.split('#')[0].split('?')[0]; } catch(err) { return false; }
+  };
+  window.addEventListener('error', e => { if (!ownError(e)) return; notify('error', '予期しないエラーが発生しました', {cause: e.message || '不明', fix: reloadHint() + 'してもう一度お試しください。本文は先にコピーして控えておくと安心です。くり返し起きる場合は、画面上部の「💬 フィードバック・不具合報告」からお知らせください。'}); });
+  window.addEventListener('unhandledrejection', e => { if (!e || e.reason === undefined || e.reason === null) return; notify('error', '予期しないエラーが発生しました', {cause: errText(e.reason), fix: reloadHint() + 'してもう一度お試しください。'}); });
 
   function updateCount(){
     const v = ta.value;
