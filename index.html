@@ -118,6 +118,8 @@ ul.items li:hover{background:var(--btn)}
 #toast .t-icon{font-size:16px}
 /* ---- スマホ・タブレット（幅820px以下）---- */
 .mtabs{display:none}
+.mobile-note{margin:0 16px 10px;padding:10px 12px;border:2px solid #d08a00;border-radius:10px;background:var(--t-warn-bg);color:var(--t-warn-text);font-size:13px;line-height:1.6}
+.mobile-note button{margin-top:6px;color:inherit;background:transparent;border-color:currentColor}
 @media (max-width:820px){
   body{height:auto;min-height:100%}
   header{padding:10px 12px 2px}
@@ -126,6 +128,7 @@ ul.items li:hover{background:var(--btn)}
   .settings, details.settings{margin:0 12px 8px}
   main{flex-direction:column;padding:0 12px 8px}
   /* 本文と結果をタブで切り替える（縦に長くなりすぎないように） */
+  .mobile-note{margin:0 12px 8px}
   .mtabs{display:flex;gap:6px;position:sticky;top:0;z-index:5;background:var(--bg);padding:6px 12px 8px}
   .mtabs button{flex:1;padding:9px 8px;font-weight:600}
   .mtabs button.on{background:var(--accent);color:var(--accent-text);border-color:var(--accent)}
@@ -166,6 +169,11 @@ ul.items li:hover{background:var(--btn)}
   <h1>小説 整形・校正ツール</h1>
   <p>Notionやpixivからコピーした本文を下に貼り付けると、改行・空行を保ったまま整えます。整形はせずに、<strong>校正チェックや文章の分析だけに使う</strong>こともできます。本文がこのページの外に送られることはありません（通信するのは、詳細チェック用の辞書を読み込むときだけです）。 <a href="https://github.com/hano2552550-web/novel-tool#readme" target="_blank" rel="noopener">使い方はこちら</a>　<a href="https://docs.google.com/forms/d/e/1FAIpQLSdpWWd7MK2q0u5Au-3xHVOrL-j88KVaN6KFAseBAIou_LjZmw/viewform" target="_blank" rel="noopener">💬 フィードバック・不具合報告</a></p>
 </header>
+<div id="mobileNote" class="mobile-note" hidden>
+  <strong>📱 スマホ・タブレットでお使いの方へ</strong><br>
+  スマホ・タブレットでは、Notionの書式（空行など）を保ったままpixivやぷらいべったーに貼り付けることはできません。この端末では、<strong>校正チェックと文章の分析</strong>にお使いください。書式を保ったコピーは、パソコン（Chrome・Edge）で使えます。
+  <button id="mobileNoteClose" class="small" aria-label="このお知らせを閉じる">閉じる</button>
+</div>
 
 <div class="toolbar">
   <button id="btnCopy" class="primary">📋 pixiv用にコピー</button>
@@ -1416,12 +1424,6 @@ if (typeof module !== 'undefined') module.exports = {analyzeText, webHtmlToText,
     const plainN = normalizeNewlines(plain || '').replace(/^\n+|\n+$/g, '');
     if (!text.trim() && !fromNotion && plainN && !/\n\n\n/.test(plainN) && looksDoubleSpaced(plainN) && !/<br|<p[^>]*>\s*<span/i.test(html || '')) {
       text = plainN.replace(/\n\n/g, '\n'); exact = true; msg = 'notion-lossy';
-      // 字下げは2行目以降には残るが、最初の行だけ消えることがある。
-      // ほかの地の文の行の大半が字下げされていれば、最初の行（地の文のとき）にも字下げを補う
-      const ls = text.split('\n');
-      const prose = ls.slice(1).filter(l => l.trim() && !isDialogueLine(l));
-      const indented = prose.filter(l => /^\u3000/.test(l)).length;
-      if (ls[0] && !/^[\s\u3000]/.test(ls[0]) && !isDialogueLine(ls[0]) && prose.length >= 3 && indented / prose.length >= 0.7) { ls[0] = '\u3000' + ls[0]; text = ls.join('\n'); msg = 'notion-lossy-indent'; }
     }
     if (!text.trim() && html && !fromNotion && /\n[ \t　]*\n/.test(normalizeNewlines(plain || ''))) {
       // pixivなどのWebページからのコピー：段落と改行・空行をそのまま保つ
@@ -1437,7 +1439,7 @@ if (typeof module !== 'undefined') module.exports = {analyzeText, webHtmlToText,
     const before = text;
     text = formatText(text, settings, exact);
     insertText(text);
-    if (/^notion-lossy/.test(msg)) notify('warn', '貼り付けましたが、Notionの空行は読み取れませんでした', {detail: '1段落＝1行に整えて貼り付けました。行頭の字下げはそのまま残っています' + (msg === 'notion-lossy-indent' ? '（最初の行は字下げが消えていたため、ほかの行に合わせて補いました）' : '') + '。受け取ったデータ：' + (types.join(', ') || 'なし'), cause: 'iPhone・iPadのSafariなど一部のブラウザでは、Notion独自の情報（空のブロック＝空行）が受け取れず、普通のテキストだけが届きます', fix: '空行まで再現するには、パソコンのChrome・Edgeでお使いください。場面転換などの空行は、貼り付けたあとに入力欄で入れ直すこともできます。'});
+    if (msg === 'notion-lossy') notify('warn', '貼り付けました（Notionの書式は保持されていません）', {detail: '空行などの書式が届かなかったため、1段落＝1行で貼り付けました。受け取ったデータ：' + (types.join(', ') || 'なし'), cause: 'スマホ・タブレットのNotionアプリなどからコピーすると、空行（空のブロック）などの書式の情報が含まれません', fix: 'この本文は校正チェック・文章の分析にお使いください。書式を保ったままpixivなどに貼り付けたいときは、パソコンのNotion（Chrome・Edge）からコピーしてください。'});
     else if (/読み取れませんでした/.test(msg)) notify('warn', '貼り付けましたが、Notionの空行を読み取れませんでした', {detail: '受け取ったデータ：' + types.join(', '), cause: 'Notionから空行の情報（ブロック情報）が届かなかったか、対応していない形式でした', fix: 'Notionで本文を「文字としてドラッグ選択」してコピーし直してみてください。改善しない場合は「整形の設定」→「🩺 貼り付けの診断情報をコピー」の内容を、画面上部の「💬 フィードバック・不具合報告」から送ってください。'});
     else notify('success', '貼り付けました！', {detail: msg || (before !== text ? '改行を整えて貼り付けました。' : '')});
   });
@@ -1470,7 +1472,8 @@ if (typeof module !== 'undefined') module.exports = {analyzeText, webHtmlToText,
     if (!text.trim()) { notify('error', 'コピーできませんでした', {cause: '本文が空です', fix: 'pixivの閲覧ページなどからコピーした本文を入力欄に貼り付けてから押してください。'}); return; }
     const nb = textToNotionPlain(text);
     const r = await copyText(nb.text);
-    if (r.ok) notify('success', 'Notion用にコピーしました！', {detail: `${nb.count}行を、改行・空行・字下げを保ったままコピーしました。Notionのページに貼り付けてください（1行が1ブロックになります）。`});
+    if (r.ok && touchDevice()) notify('warn', 'コピーしました（スマホ・タブレットでは書式の保持に対応していません）', {detail: 'スマホ・タブレットのアプリに貼り付けると、空行などの書式が再現されないことがあります。書式を保ったコピーは、パソコン（Chrome・Edge）でお使いください。'});
+    else if (r.ok) notify('success', 'Notion用にコピーしました！', {detail: `${nb.count}行を、改行・空行・字下げを保ったままコピーしました。Notionのページに貼り付けてください（1行が1ブロックになります）。`});
     else notify('error', 'コピーできませんでした', {cause: r.cause, fix: 'ページを再読み込みしてもう一度お試しください。'});
   };
 
@@ -1478,7 +1481,8 @@ if (typeof module !== 'undefined') module.exports = {analyzeText, webHtmlToText,
     const text = ta.value.replace(/\r\n?/g, '\n');
     if (!text.trim()) { notify('error', 'コピーできませんでした', {cause: '本文が空です', fix: 'Notionからコピーした本文を入力欄に貼り付けてから押してください。'}); return; }
     const r = await copyText(text);
-    if (r.ok) notify('success', 'コピーしました！', {detail: `${text.replace(/\n/g,'').length}文字をコピーしました。pixivの投稿画面に貼り付けてください。`});
+    if (r.ok && touchDevice()) notify('warn', 'コピーしました（スマホ・タブレットでは書式の保持に対応していません）', {detail: 'スマホ・タブレットでは、Notionの空行などの書式を保ったまま貼り付けることはできません。書式を保ったコピーは、パソコン（Chrome・Edge）でお使いください。'});
+    else if (r.ok) notify('success', 'コピーしました！', {detail: `${text.replace(/\n/g,'').length}文字をコピーしました。pixivの投稿画面に貼り付けてください。`});
     else notify('error', 'コピーできませんでした', {cause: r.cause, fix: '入力欄をクリックして Ctrl+A（全選択）→ Ctrl+C で手動コピーしてください。'});
   };
 
@@ -1572,6 +1576,14 @@ if (typeof module !== 'undefined') module.exports = {analyzeText, webHtmlToText,
 
   function lineStarts(t){ const s = [0]; for (let i = 0; i < t.length; i++) if (t[i] === '\n') s.push(i + 1); return s; }
   function lineOf(starts, idx){ let lo = 0, hi = starts.length - 1; while (lo < hi) { const mid = (lo + hi + 1) >> 1; if (starts[mid] <= idx) lo = mid; else hi = mid - 1; } return lo; }
+
+  // スマホ・タブレット（タッチ操作の端末、または狭い画面）では、校正・分析専用であることを案内する
+  const touchDevice = () => window.matchMedia('(max-width:820px), (pointer:coarse)').matches;
+  const NOTE_KEY = KEY_PREFIX + 'novelTool.mobileNoteClosed';
+  try { if (touchDevice() && localStorage.getItem(NOTE_KEY) !== '1') $('mobileNote').hidden = false; } catch(e) { if (touchDevice()) $('mobileNote').hidden = false; }
+  // スマホ・タブレットでは、校正チェックを主なボタンにする
+  if (touchDevice()) { $('btnCopy').classList.remove('primary'); $('btnCheck').classList.add('primary'); }
+  $('mobileNoteClose').onclick = () => { $('mobileNote').hidden = true; try { localStorage.setItem(NOTE_KEY, '1'); } catch(e) {} };
 
   // スマホ・タブレットでの本文／結果の切り替え
   const mobile = () => window.matchMedia('(max-width:820px)').matches;
