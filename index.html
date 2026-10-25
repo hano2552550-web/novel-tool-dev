@@ -1365,8 +1365,12 @@ if (typeof module !== 'undefined') module.exports = {analyzeText, webHtmlToText,
       let v = ''; try { v = cd.getData(t); } catch(e) { d.types[t] = '読めません: ' + errText(e); continue; }
       const info = {length: v.length};
       if (/_notion/.test(t)) { try { info.structure = maskJson(JSON.parse(v), '', 0); } catch(e) { info.structure = '(JSONではない)'; } }
-      else if (t === 'text/html') info.tags = (v.match(/<\/?[a-zA-Z][a-zA-Z0-9-]*|<!--[^>]{0,30}/g) || []).slice(0, 60).map(s => s.replace(/notionvc: .*/, 'notionvc'));
-      else if (t === 'text/plain') info.lineBreaks = (v.match(/(\r?\n)+/g) || []).slice(0, 40).map(s => s.replace(/\r/g, '').length);
+      else if (t === 'text/html') {
+        info.tags = (v.match(/<\/?[a-zA-Z][a-zA-Z0-9-]*|<!--[^>]{0,30}/g) || []).slice(0, 60).map(s => s.replace(/notionvc: .*/, 'notionvc'));
+        // 段落の数・空の段落・行頭が全角スペースの段落の数（空行や字下げが含まれているかの確認用。文字そのものは含めない）
+        try { const ps = [...new DOMParser().parseFromString(v, 'text/html').querySelectorAll('p')]; info.paragraphs = {count: ps.length, empty: ps.filter(p => !p.textContent.replace(/[\s\u3000\u200B]/g, '')).length, indented: ps.filter(p => /^\u3000/.test(p.textContent)).length, withBr: ps.filter(p => p.querySelector('br')).length}; } catch(e) {}
+      }
+      else if (t === 'text/plain') { info.lineBreaks = (v.match(/(\r?\n)+/g) || []).slice(0, 40).map(s => s.replace(/\r/g, '').length); info.indentedLines = v.split(/\r?\n/).filter(l => /^\u3000/.test(l)).length; }
       d.types[t] = info;
     }
     return d;
