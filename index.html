@@ -1406,6 +1406,13 @@ if (typeof module !== 'undefined') module.exports = {analyzeText, webHtmlToText,
     }
     // 普通のテキストに空行があるとき（＝段落が空行で区切られているページ）だけ、段落として読む。
     // 1段落＝1行のHTML（Googleドキュメントなど）は従来どおり1行ずつ読む。
+    // Notionからのコピーなのに独自の情報が届かなかった場合（iPhone・iPadのSafariなど）。
+    // 普通のテキストは「段落ごとに空行1つ」で区切られ、空のブロックと行頭の字下げは含まれない。
+    // pixivのページ（改行＝<br>）と取り違えないよう、段落がすべて空行1つで区切られ、改行タグのないものをNotionとみなす
+    const plainN = normalizeNewlines(plain || '').replace(/^\n+|\n+$/g, '');
+    if (!text.trim() && !fromNotion && plainN && !/\n\n\n/.test(plainN) && looksDoubleSpaced(plainN) && !/<br|<p[^>]*>\s*<span/i.test(html || '')) {
+      text = plainN.replace(/\n\n/g, '\n'); exact = true; msg = 'notion-lossy';
+    }
     if (!text.trim() && html && !fromNotion && /\n[ \t　]*\n/.test(normalizeNewlines(plain || ''))) {
       // pixivなどのWebページからのコピー：段落と改行・空行をそのまま保つ
       let w = null; try { w = webHtmlToText(html, new DOMParser()); } catch(err) { w = null; }
@@ -1420,7 +1427,8 @@ if (typeof module !== 'undefined') module.exports = {analyzeText, webHtmlToText,
     const before = text;
     text = formatText(text, settings, exact);
     insertText(text);
-    if (/読み取れませんでした/.test(msg)) notify('warn', '貼り付けましたが、Notionの空行を読み取れませんでした', {detail: '受け取ったデータ：' + types.join(', '), cause: 'Notionから空行の情報（ブロック情報）が届かなかったか、対応していない形式でした', fix: 'Notionで本文を「文字としてドラッグ選択」してコピーし直してみてください。改善しない場合は「整形の設定」→「🩺 貼り付けの診断情報をコピー」の内容を、画面上部の「💬 フィードバック・不具合報告」から送ってください。'});
+    if (msg === 'notion-lossy') notify('warn', '貼り付けましたが、Notionの空行と行頭の字下げは読み取れませんでした', {detail: '1段落＝1行に整えて貼り付けました。受け取ったデータ：' + (types.join(', ') || 'なし'), cause: 'iPhone・iPadのSafariなど一部のブラウザでは、Notion独自の空行・字下げの情報が受け取れないことがあります（普通のテキストだけが届きます）', fix: '空行まで再現するには、パソコンのChrome・Edgeでお使いください。字下げは「整形の設定」→「地の文の字下げ：付ける」で付け直せます（「」で始まる行には付きません）。'});
+    else if (/読み取れませんでした/.test(msg)) notify('warn', '貼り付けましたが、Notionの空行を読み取れませんでした', {detail: '受け取ったデータ：' + types.join(', '), cause: 'Notionから空行の情報（ブロック情報）が届かなかったか、対応していない形式でした', fix: 'Notionで本文を「文字としてドラッグ選択」してコピーし直してみてください。改善しない場合は「整形の設定」→「🩺 貼り付けの診断情報をコピー」の内容を、画面上部の「💬 フィードバック・不具合報告」から送ってください。'});
     else notify('success', '貼り付けました！', {detail: msg || (before !== text ? '改行を整えて貼り付けました。' : '')});
   });
 
