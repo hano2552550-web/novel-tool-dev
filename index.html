@@ -116,11 +116,47 @@ ul.items li:hover{background:var(--btn)}
 #toast.error{background:var(--t-err-bg);color:var(--t-err-text);border-color:var(--t-err-line)} #toast.error .t-icon{color:var(--t-err-line)}
 #toast .t-body b, #toast .t-close{color:inherit;opacity:.75}
 #toast .t-icon{font-size:16px}
+/* ---- スマホ・タブレット（幅820px以下）---- */
+.mtabs{display:none}
 @media (max-width:820px){
-  main{flex-direction:column}
-  textarea#ta{min-height:55vh}
-  aside{max-height:none}
+  body{height:auto;min-height:100%}
+  header{padding:10px 12px 2px}
+  header h1{font-size:17px}
+  .toolbar{padding:8px 12px;gap:6px}
+  .settings, details.settings{margin:0 12px 8px}
+  main{flex-direction:column;padding:0 12px 8px}
+  /* 本文と結果をタブで切り替える（縦に長くなりすぎないように） */
+  .mtabs{display:flex;gap:6px;position:sticky;top:0;z-index:5;background:var(--bg);padding:6px 12px 8px}
+  .mtabs button{flex:1;padding:9px 8px;font-weight:600}
+  .mtabs button.on{background:var(--accent);color:var(--accent-text);border-color:var(--accent)}
+  #mtabCount{margin-left:4px;font-weight:700}
+  main:not(.show-result) aside{display:none}
+  main.show-result .editor{display:none}
+  textarea#ta{min-height:60vh;min-height:60dvh}
+  aside{max-height:none;overflow:visible}
   #count{margin-left:0;width:100%}
+  /* iPhoneで入力欄をタップしたときに画面が拡大されないよう、16px以上にする */
+  textarea#ta, #memoText, select, input[type=number], .goto input{font-size:16px}
+  .setgrid{grid-template-columns:1fr}
+  .memo-sep{display:none}
+  footer.disclaimer{padding:0 12px 12px}
+  #toast{top:calc(8px + env(safe-area-inset-top))}
+}
+@media (max-width:560px){
+  /* ボタンを2列に並べて押しやすくする */
+  .toolbar{display:grid;grid-template-columns:1fr 1fr}
+  .toolbar button{padding:10px 6px;font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .toolbar #count{grid-column:1 / -1;text-align:right}
+  .toolbar .lg{display:none}
+  header p{font-size:11.5px}
+  .memo-bar button.small{padding:6px 8px}
+  ul.items li{flex-wrap:wrap}
+  ul.items li .snip{flex-basis:calc(100% - 50px)}
+  ul.items li button.small{margin-left:auto}
+}
+@media (hover:none){
+  /* タッチ操作ではボタンを少し大きく */
+  button.small{padding:6px 10px}
 }
 </style>
 </head>
@@ -135,7 +171,7 @@ ul.items li:hover{background:var(--btn)}
   <button id="btnCopy" class="primary">📋 pixiv用にコピー</button>
   <button id="btnCopyNotion">📝 Notion用にコピー</button>
   <button id="btnCheck">🔍 校正チェック</button>
-  <button id="btnFixAll">✨ 安全な修正をまとめて適用</button>
+  <button id="btnFixAll">✨ <span class="lg">安全な修正を</span>まとめて適用</button>
   <button id="btnUndo">↩ 元に戻す</button>
   <button id="btnAi">🤖 AI校正用にコピー</button>
   <button id="btnStats">📊 文章の分析</button>
@@ -192,9 +228,13 @@ ul.items li:hover{background:var(--btn)}
   </div>
 </details>
 
-<main>
+<nav class="mtabs" aria-label="表示の切り替え">
+  <button id="mtabText" class="on" aria-pressed="true">✏️ 本文</button>
+  <button id="mtabResult" aria-pressed="false">🔍 結果<span id="mtabCount"></span></button>
+</nav>
+<main id="main">
   <section class="editor">
-    <textarea id="ta" spellcheck="false" placeholder="ここにNotionからコピーした本文を貼り付けてください（Ctrl+V / ⌘V）&#10;&#10;貼り付けたあと、このまま直接編集もできます。"></textarea>
+    <textarea id="ta" spellcheck="false" placeholder="ここにNotionやpixivからコピーした本文を貼り付けてください（パソコンは Ctrl+V / ⌘V、スマホ・タブレットは長押しして「ペースト」）&#10;&#10;貼り付けたあと、このまま直接編集もできます。"></textarea>
   </section>
   <aside>
     <div id="summary">校正チェック</div>
@@ -1458,7 +1498,7 @@ if (typeof module !== 'undefined') module.exports = {analyzeText, webHtmlToText,
       '\n\n---本文ここから---\n' + numbered + '\n---本文ここまで---';
     const r = await copyText(prompt);
     const withMemo = /設定メモここから/.test(prompt);
-    if (r.ok) notify('success', 'コピーしました！', {detail: `AIへの依頼文${withMemo ? '・作品メモ' : ''}・行番号つきの本文をコピーしました。ClaudeなどのAIに貼り付けてください。結果の「行」は右側の「行へ移動」で探せます。`});
+    if (r.ok) notify('success', 'コピーしました！', {detail: `AIへの依頼文${withMemo ? '・作品メモ' : ''}・行番号つきの本文をコピーしました。ClaudeなどのAIに貼り付けてください。結果の「行」は${side()}の「行へ移動」で探せます。`});
     else notify('error', 'コピーできませんでした', {cause: r.cause, fix: 'ブラウザの設定でクリップボードへのアクセスを許可するか、ページを再読み込みしてもう一度お試しください。'});
   };
 
@@ -1515,8 +1555,24 @@ if (typeof module !== 'undefined') module.exports = {analyzeText, webHtmlToText,
   function lineStarts(t){ const s = [0]; for (let i = 0; i < t.length; i++) if (t[i] === '\n') s.push(i + 1); return s; }
   function lineOf(starts, idx){ let lo = 0, hi = starts.length - 1; while (lo < hi) { const mid = (lo + hi + 1) >> 1; if (starts[mid] <= idx) lo = mid; else hi = mid - 1; } return lo; }
 
+  // スマホ・タブレットでの本文／結果の切り替え
+  const mobile = () => window.matchMedia('(max-width:820px)').matches;
+  const side = () => mobile() ? '「🔍 結果」' : '右側';
+  function showPane(which){
+    const res = which === 'result';
+    $('main').classList.toggle('show-result', res);
+    $('mtabText').classList.toggle('on', !res); $('mtabText').setAttribute('aria-pressed', String(!res));
+    $('mtabResult').classList.toggle('on', res); $('mtabResult').setAttribute('aria-pressed', String(res));
+    // 切り替えたら、タブが画面の上に来るようにする（下にスクロールしていても内容の先頭から見られるように）
+    if (mobile()) { const tabs = document.querySelector('.mtabs'); if (tabs.getBoundingClientRect().top < 0 || res) tabs.scrollIntoView({block:'start'}); }
+  }
+  $('mtabText').onclick = () => showPane('text');
+  $('mtabResult').onclick = () => showPane('result');
+
   function jump(i, len){
+    if (mobile()) showPane('text');
     const total = Math.max(1, ta.value.length);
+    if (mobile()) ta.scrollIntoView({block:'start'});
     ta.scrollTop = Math.max(0, (i / total) * ta.scrollHeight - ta.clientHeight / 3);
     ta.setSelectionRange(i, i); ta.blur(); ta.focus();
     ta.setSelectionRange(i, i + Math.max(len, 1));
@@ -1554,6 +1610,7 @@ if (typeof module !== 'undefined') module.exports = {analyzeText, webHtmlToText,
     lastTotal = total;
     if (lastChecked) { const d = new Date(); lastCheckedAt = `${d.getHours()}:${String(d.getMinutes()).padStart(2,'0')}:${String(d.getSeconds()).padStart(2,'0')}`; }
     $('summary').textContent = lastChecked ? (total ? `指摘 ${total}件` : '指摘はありません 🎉') : '校正チェック';
+    $('mtabCount').textContent = lastChecked ? `（${total}）` : '';
     if (lastChecked && deepStatusText()) { const ds = document.createElement('span'); ds.className = 'checked-at'; ds.textContent = deepStatusText(); $('summary').append(ds); }
     if (lastChecked) { const tm = document.createElement('span'); tm.className = 'checked-at'; tm.textContent = ta.value.length > 60000 ? `${lastCheckedAt} 時点（長い本文のため、直したあとは「校正チェック」を押して更新してください）` : `${lastCheckedAt} 時点（本文を直すと自動で更新されます）`; $('summary').append(tm); }
     if (!lastChecked) return;
@@ -1608,6 +1665,7 @@ if (typeof module !== 'undefined') module.exports = {analyzeText, webHtmlToText,
     const t = ta.value;
     if (!t.trim()) { notify('error', '分析できませんでした', {cause: '本文が空です', fix: '本文を貼り付けてから押してください。'}); return; }
     const a = analyzeText(t);
+    if (mobile()) showPane('result');
     const box = $('issues'); box.textContent = '';
     lastChecked = false;
     $('summary').textContent = '📊 文章の分析';
@@ -1634,18 +1692,19 @@ if (typeof module !== 'undefined') module.exports = {analyzeText, webHtmlToText,
     wrap.append(el('p', '「🔍 校正チェック」を押すと、指摘の一覧に戻ります。', 'note'));
     box.append(wrap);
     document.querySelector('aside').scrollTop = 0;
-    notify('success', '分析しました！', {detail: '右側に文章の分析結果を表示しました。'});
+    notify('success', '分析しました！', {detail: `${side()}に文章の分析結果を表示しました。`});
   }
   $('btnStats').onclick = renderStats;
 
   $('btnCheck').onclick = () => {
     if (!ta.value.trim()) { notify('error', 'チェックできませんでした', {cause: '本文が空です', fix: '本文を貼り付けてから押してください。'}); return; }
-    if (!enabledIds().size) { notify('warn', 'チェックする項目がありません', {cause: 'チェック項目がすべてオフになっています', fix: '右側の「チェック項目の選択」で項目をオンにしてください。'}); return; }
+    if (!enabledIds().size) { notify('warn', 'チェックする項目がありません', {cause: 'チェック項目がすべてオフになっています', fix: `${side()}の「チェック項目の選択」で項目をオンにしてください。`}); return; }
     const before = lastChecked ? lastTotal : null;
     runCheck();
+    if (mobile()) showPane('result');
     const aside = document.querySelector('aside'); aside.scrollTop = 0;
     const s = $('summary'); s.classList.remove('flash'); void s.offsetWidth; s.classList.add('flash');
-    if (before === null) notify('success', 'チェックしました！', {detail: lastTotal ? `指摘が ${lastTotal}件 あります。右側の一覧を確認してください。` : '指摘はありません。'});
+    if (before === null) notify('success', 'チェックしました！', {detail: lastTotal ? `指摘が ${lastTotal}件 あります。${side()}の一覧を確認してください。` : '指摘はありません。'});
     else if (before === lastTotal) notify('success', '再チェックしました！', {detail: `指摘 ${lastTotal}件（変化なし）`});
     else notify('success', '再チェックしました！', {detail: `指摘 ${before}件 → ${lastTotal}件`});
   };
