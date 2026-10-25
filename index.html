@@ -64,7 +64,13 @@ select,input[type=number]{font:inherit;padding:4px 6px;border:1px solid var(--li
 main{flex:1;display:flex;gap:12px;padding:0 16px 8px;min-height:0}
 footer.disclaimer{padding:0 16px 10px;font-size:11px;line-height:1.6;color:var(--muted)}
 footer.disclaimer strong{font-weight:600}
-.editor{flex:1.6;display:flex;min-width:0}
+.editor{flex:1.6;display:flex;min-width:0;position:relative}
+/* 指摘箇所の目印：本文の上に同じ配置の透明な層を重ね、該当箇所だけ色付けして点滅させる */
+#taHl{position:absolute;pointer-events:none;overflow:hidden;color:transparent;white-space:pre-wrap;overflow-wrap:break-word;box-sizing:border-box;margin:0;border:0;z-index:2}
+#taHl mark{color:transparent;background:rgba(255,196,0,.55);border-radius:3px;box-shadow:0 0 0 2px rgba(255,160,0,.9);animation:hlBlink .45s ease-in-out 0s 4 alternate,hlFade .8s ease-out 1.8s forwards}
+@keyframes hlBlink{from{background:rgba(255,196,0,.15);box-shadow:0 0 0 2px rgba(255,160,0,.3)}to{background:rgba(255,196,0,.65);box-shadow:0 0 0 3px rgba(255,140,0,1)}}
+@keyframes hlFade{to{background:rgba(255,196,0,.18);box-shadow:0 0 0 1px rgba(255,160,0,.35)}}
+@media (prefers-reduced-motion: reduce){#taHl mark{animation:none}}
 textarea#ta{flex:1;width:100%;resize:none;border:1px solid var(--line);border-radius:10px;background:var(--panel);color:var(--text);padding:14px 16px;font-size:15px;line-height:1.8;font-family:"Hiragino Mincho ProN","Yu Mincho","YuMincho",serif}
 textarea#ta:focus{outline:2px solid var(--accent);outline-offset:-1px}
 aside{flex:1;min-width:0;background:var(--panel);border:1px solid var(--line);border-radius:10px;overflow:auto;padding:10px 12px}
@@ -171,7 +177,7 @@ ul.items li:hover{background:var(--btn)}
 </header>
 <div id="mobileNote" class="mobile-note" hidden>
   <strong>📱 スマホ・タブレットでお使いの方へ</strong><br>
-  スマホ・タブレットでは、Notionの書式（空行など）を保ったままpixivやぷらいべったーに貼り付けることはできません。この端末では、<strong>校正チェックと文章の分析</strong>にお使いください。書式を保ったコピーは、パソコン（Chrome・Edge）で使えます。
+  スマホ・タブレットでは、Notionの書式（空行など）を保ったままpixivやぷらいべったーなどに貼り付けることはできません。この端末では、<strong>校正チェックと文章の分析</strong>にお使いください。書式を保ったコピーは、パソコン（Chrome・Edge）で使えます。
   <button id="mobileNoteClose" class="small" aria-label="このお知らせを閉じる">閉じる</button>
 </div>
 
@@ -242,6 +248,7 @@ ul.items li:hover{background:var(--btn)}
 </nav>
 <main id="main">
   <section class="editor">
+    <div id="taHl" aria-hidden="true" hidden></div>
     <textarea id="ta" spellcheck="false" placeholder="ここにNotionやpixivからコピーした本文を貼り付けてください（パソコンは Ctrl+V / ⌘V、スマホ・タブレットは長押しして「ペースト」）&#10;&#10;貼り付けたあと、このまま直接編集もできます。"></textarea>
   </section>
   <aside>
@@ -1599,13 +1606,41 @@ if (typeof module !== 'undefined') module.exports = {analyzeText, webHtmlToText,
   $('mtabText').onclick = () => showPane('text');
   $('mtabResult').onclick = () => showPane('result');
 
+  // 指摘箇所に移動して、その部分を色付け・点滅させる
+  const hl = $('taHl');
+  let hlTimer = null;
+  function hideHl(){ hl.hidden = true; hl.textContent = ''; clearTimeout(hlTimer); }
+  function showHl(i, len){
+    // 本文と同じ文字の配置になるよう、見た目の設定を写す
+    const cs = getComputedStyle(ta);
+    for (const p of ['fontFamily','fontSize','fontWeight','lineHeight','letterSpacing','paddingTop','paddingRight','paddingBottom','paddingLeft','tabSize','wordBreak','textIndent','fontFeatureSettings']) hl.style[p] = cs[p];
+    hl.style.left = (ta.offsetLeft + ta.clientLeft) + 'px';
+    hl.style.top = (ta.offsetTop + ta.clientTop) + 'px';
+    hl.style.width = ta.clientWidth + 'px';
+    hl.style.height = ta.clientHeight + 'px';
+    const v = ta.value, end = i + Math.max(len, 1);
+    const mk = document.createElement('mark');
+    mk.textContent = v.slice(i, end) || ' ';
+    hl.textContent = '';
+    hl.append(document.createTextNode(v.slice(0, i)), mk, document.createTextNode(v.slice(end) + '\n'));
+    hl.hidden = false;
+    return mk;
+  }
+  ta.addEventListener('scroll', () => { if (!hl.hidden) hl.scrollTop = ta.scrollTop; });
+  ta.addEventListener('input', hideHl);
+  window.addEventListener('resize', hideHl);
+
   function jump(i, len){
     if (mobile()) showPane('text');
-    const total = Math.max(1, ta.value.length);
+    const mk = showHl(i, len);
+    // 目印の位置から、本文を正確にスクロールする（該当箇所が上から3分の1あたりに来るように）
+    ta.scrollTop = Math.max(0, mk.offsetTop - ta.clientHeight / 3);
+    hl.scrollTop = ta.scrollTop;
     if (mobile()) ta.scrollIntoView({block:'start'});
-    ta.scrollTop = Math.max(0, (i / total) * ta.scrollHeight - ta.clientHeight / 3);
-    ta.setSelectionRange(i, i); ta.blur(); ta.focus();
-    ta.setSelectionRange(i, i + Math.max(len, 1));
+    // スマホ・タブレットでは、キーボードが出て見えなくならないよう、選択だけして入力状態にはしない
+    if (touchDevice()) { ta.setSelectionRange(i, i + Math.max(len, 1)); }
+    else { ta.focus({preventScroll:true}); ta.setSelectionRange(i, i + Math.max(len, 1)); ta.scrollTop = Math.max(0, mk.offsetTop - ta.clientHeight / 3); hl.scrollTop = ta.scrollTop; }
+    clearTimeout(hlTimer); hlTimer = setTimeout(hideHl, 6000);
   }
 
   function applyOne(issue, ruleId){
